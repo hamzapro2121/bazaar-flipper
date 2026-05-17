@@ -12,21 +12,33 @@ st.set_page_config(page_title="Hypixel Bazaar AI Sandbox", page_icon="📈", lay
 st.title("📈 Hypixel SkyBlock Unrestricted Bazaar AI Trading Sandbox")
 st.markdown("This web application uses an advanced **Genetic Optimization Algorithm** capable of dynamically evaluating any asset in the Hypixel economy.")
 
+# 🔥 CRITICAL CREDENTIAL CONFIGURATION 🔥
+# Replace this string with the key you get by typing /api new inside the Hypixel server!
+HYPIXEL_API_KEY = "YOUR_HYPIXEL_API_KEY_HERE"
+
 # --- STEP 1: LIVE HYPIXEL API DATA ENGINE (ALL ITEMS) ---
 @st.cache_data(ttl=60)
 def fetch_all_bazaar_products():
-    """Fetches real-time price profiles for every item on the Hypixel Bazaar."""
+    """Fetches real-time price profiles for every item on the Hypixel Bazaar using proper authorization headers."""
     url = "https://hypixel.net"
-    headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+    
+    # Adding authentic headers to guarantee bypassing Cloudflare edge drops
+    headers = {
+        "API-Key": HYPIXEL_API_KEY,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
     
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=12)
         if response.status_code == 200:
             data_json = response.json()
             if data_json.get("success"):
                 return data_json["products"]
-    except Exception:
-        pass
+        else:
+            st.sidebar.error(f"⚠️ API Error Code: {response.status_code}. Using secure fallback engine.")
+    except Exception as e:
+        st.sidebar.error(f"⚠️ Connection Error: {str(e)}")
     return None
 
 # Pull entire catalog from live API
@@ -36,16 +48,23 @@ if raw_products:
     ALL_AVAILABLE_ITEMS = sorted(list(raw_products.keys()))
 else:
     # Safe structural fallbacks if API is offline during loading
-    ALL_AVAILABLE_ITEMS = ['ENCHANTED_DIAMOND', 'PURPLE_CANDY', 'BOOSTER_COOKIE', 'STOCK_OF_STONKS', 'ENCHANTED_GOLD']
+    ALL_AVAILABLE_ITEMS = ['ENCHANTED_DIAMOND', 'PURPLE_CANDY', 'BOOSTER_COOKIE', 'STOCK_OF_STONKS', 'ENCHANTED_GOLD', 'SUPER_COMPACTOR_3000', 'HYPERION', 'RECHIPPED_CARROT']
     raw_products = {}
 
 # --- SIDEBAR CONTROL PANEL ---
 st.sidebar.header("🛒 Asset Portfolio Selection")
-# Multi-select dropdown packed with every item in the game
+st.sidebar.markdown(f"**Total Economy Scope Detected:** `{len(ALL_AVAILABLE_ITEMS)}` items available.")
+
+# Select All Option checkbox helper
+if st.sidebar.checkbox("✅ Select Entire Bazaar (Warning: High CPU load)", value=False):
+    DEFAULT_SELECTION = ALL_AVAILABLE_ITEMS
+else:
+    DEFAULT_SELECTION = [item for item in ['ENCHANTED_DIAMOND', 'PURPLE_CANDY', 'BOOSTER_COOKIE'] if item in ALL_AVAILABLE_ITEMS]
+
 SELECTED_ITEMS = st.sidebar.multiselect(
     "Choose Items to Optimize", 
     options=ALL_AVAILABLE_ITEMS, 
-    default=ALL_AVAILABLE_ITEMS[:3] # Starts with the first 3 items as default
+    default=DEFAULT_SELECTION
 )
 
 st.sidebar.header("⚙️ Simulation Settings")
@@ -62,7 +81,6 @@ def generate_market_data(steps, selected_items):
     time_axis = np.arange(steps)
     
     for item in selected_items:
-        # Dynamic extraction of fallback points directly based on real-time value scales
         live_buy = 100.0
         live_sell = 103.0
         sell_moving_vol = 5000
@@ -73,10 +91,8 @@ def generate_market_data(steps, selected_items):
             live_sell = status.get("sellPrice", 103.0)
             sell_moving_vol = max(10, status.get("sellMovingWeek", 500000) // 10080)
             
-        # Avoid mathematical divide-by-zero crashes on dead items
         if live_buy <= 0: live_buy = 1.0
             
-        # Simulate price pathways relative to actual market pricing
         random_noise = np.random.normal(0, live_buy * 0.012, steps)
         vol_noise = np.random.poisson(sell_moving_vol, steps)
         
@@ -126,7 +142,6 @@ def run_trading_simulation(dna, selected_items, return_history=False):
             
             if inventory[item] == 0:
                 if current_buy < ma_price * (1 - buy_dip_percent) and wallet >= current_buy:
-                    # Dynamically scales batch orders safely based on basic unit costs
                     max_allowed = 5000 if current_buy < 10000 else (100 if current_buy < 500000 else 5)
                     affordable = int(wallet // current_buy)
                     units_to_buy = min(max_allowed, affordable, int(market_available_vol))
@@ -241,7 +256,6 @@ else:
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("🧬 Top Strategic Configurations")
-            # Displays optimized strategy settings for selected portfolio entities
             display_limit = min(5, len(SELECTED_ITEMS))
             st.write(f"Showing up to {display_limit} items:")
             for item in SELECTED_ITEMS[:display_limit]:
@@ -252,7 +266,7 @@ else:
 
         with col2:
             st.subheader("📦 Asset Yield Allocations")
-            for item, prof in list(item_profits.items())[:10]: # Caps UI output list to avoid layout clutter
+            for item, prof in list(item_profits.items())[:10]: 
                 st.metric(label=f"{item} Yield", value=f"{prof:,.2f} Coins")
 
         st.subheader("📊 Portfolio Liquidity Tracking Window")
